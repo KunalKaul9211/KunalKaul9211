@@ -1,0 +1,149 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: monkmedia-mongodb
+  namespace: monkmedia-nrcs
+  labels:
+    app: monkmedia-mongodb
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: monkmedia-mongodb
+  template:
+    metadata:
+      labels:
+        app: monkmedia-mongodb
+    spec:
+      containers:
+      - name: mongodb
+        image: mongo:6.0
+        ports:
+        - containerPort: 27017
+        env:
+        - name: MONGO_INITDB_ROOT_USERNAME
+          value: "admin"
+        - name: MONGO_INITDB_ROOT_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: monkmedia-secrets
+              key: MONGO_ROOT_PASSWORD
+        - name: MONGO_INITDB_DATABASE
+          value: "monkmedia_nrcs"
+        volumeMounts:
+        - name: mongodb-storage
+          mountPath: /data/db
+        - name: mongo-init
+          mountPath: /docker-entrypoint-initdb.d
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+        livenessProbe:
+          exec:
+            command:
+            - mongosh
+            - --eval
+            - "db.adminCommand('ping')"
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+            - mongosh
+            - --eval
+            - "db.adminCommand('ping')"
+          initialDelaySeconds: 5
+          periodSeconds: 5
+      volumes:
+      - name: mongodb-storage
+        persistentVolumeClaim:
+          claimName: mongodb-pvc
+      - name: mongo-init
+        configMap:
+          name: mongo-init-script
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: monkmedia-mongodb
+  namespace: monkmedia-nrcs
+  labels:
+    app: monkmedia-mongodb
+spec:
+  selector:
+    app: monkmedia-mongodb
+  ports:
+  - port: 27017
+    targetPort: 27017
+  type: ClusterIP
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: mongodb-pvc
+  namespace: monkmedia-nrcs
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mongo-init-script
+  namespace: monkmedia-nrcs
+data:
+  mongo-init.js: |
+    // MongoDB initialization script
+    db = db.getSiblingDB('monkmedia_nrcs');
+    
+    // Create application user
+    db.createUser({
+      user: 'monkmedia_user',
+      pwd: 'monkmedia_password',
+      roles: [
+        {
+          role: 'readWrite',
+          db: 'monkmedia_nrcs'
+        }
+      ]
+    });
+    
+    // Create initial collections with indexes
+    db.createCollection('users');
+    db.createCollection('stories');
+    db.createCollection('departments');
+    db.createCollection('workflows');
+    db.createCollection('notifications');
+    
+    // Create indexes for better performance
+    db.users.createIndex({ email: 1 }, { unique: true });
+    db.users.createIndex({ department: 1 });
+    db.users.createIndex({ role: 1 });
+    db.users.createIndex({ isActive: 1 });
+    
+    db.stories.createIndex({ status: 1 });
+    db.stories.createIndex({ department: 1 });
+    db.stories.createIndex({ author: 1 });
+    db.stories.createIndex({ createdAt: -1 });
+    db.stories.createIndex({ priority: 1 });
+    db.stories.createIndex({ tags: 1 });
+    db.stories.createIndex({ 'scheduling.broadcastAt': 1 });
+    
+    db.departments.createIndex({ name: 1 }, { unique: true });
+    db.departments.createIndex({ isActive: 1 });
+    
+    db.workflows.createIndex({ storyId: 1 });
+    db.workflows.createIndex({ status: 1 });
+    
+    db.notifications.createIndex({ userId: 1 });
+    db.notifications.createIndex({ read: 1 });
+    db.notifications.createIndex({ createdAt: -1 });
+    
+    print('MonkMedia NRCS database initialized successfully!');

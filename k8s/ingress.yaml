@@ -1,0 +1,63 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: monkmedia-ingress
+  namespace: monkmedia-nrcs
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/rate-limit: "100"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+spec:
+  rules:
+  - host: monkmedia.local
+    http:
+      paths:
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: monkmedia-app
+            port:
+              number: 5000
+      - path: /socket.io
+        pathType: Prefix
+        backend:
+          service:
+            name: monkmedia-app
+            port:
+              number: 5000
+      - path: /uploads
+        pathType: Prefix
+        backend:
+          service:
+            name: monkmedia-app
+            port:
+              number: 5000
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: monkmedia-app
+            port:
+              number: 5000
+  # Uncomment for HTTPS
+  # tls:
+  # - hosts:
+  #   - monkmedia.local
+  #   secretName: monkmedia-tls
+---
+# Uncomment for HTTPS certificate
+# apiVersion: v1
+# kind: Secret
+# metadata:
+#   name: monkmedia-tls
+#   namespace: monkmedia-nrcs
+# type: kubernetes.io/tls
+# data:
+#   tls.crt: # Your TLS certificate (base64 encoded)
+#   tls.key: # Your TLS private key (base64 encoded)
