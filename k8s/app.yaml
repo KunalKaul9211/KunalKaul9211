@@ -1,0 +1,204 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: monkmedia-app
+  namespace: monkmedia-nrcs
+  labels:
+    app: monkmedia-app
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: monkmedia-app
+  template:
+    metadata:
+      labels:
+        app: monkmedia-app
+    spec:
+      containers:
+      - name: monkmedia-app
+        image: monkmedia-nrcs:latest
+        ports:
+        - containerPort: 5000
+        env:
+        - name: NODE_ENV
+          valueFrom:
+            configMapKeyRef:
+              name: monkmedia-config
+              key: NODE_ENV
+        - name: PORT
+          valueFrom:
+            configMapKeyRef:
+              name: monkmedia-config
+              key: PORT
+        - name: MONGODB_URI
+          valueFrom:
+            secretKeyRef:
+              name: monkmedia-secrets
+              key: MONGODB_URI
+        - name: REDIS_URL
+          valueFrom:
+            configMapKeyRef:
+              name: monkmedia-config
+              key: REDIS_URL
+        - name: JWT_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: monkmedia-secrets
+              key: JWT_SECRET
+        - name: JWT_EXPIRE
+          valueFrom:
+            configMapKeyRef:
+              name: monkmedia-config
+              key: JWT_EXPIRE
+        - name: CLIENT_URL
+          valueFrom:
+            configMapKeyRef:
+              name: monkmedia-config
+              key: CLIENT_URL
+        - name: SOCKET_URL
+          valueFrom:
+            configMapKeyRef:
+              name: monkmedia-config
+              key: SOCKET_URL
+        - name: MAX_FILE_SIZE
+          valueFrom:
+            configMapKeyRef:
+              name: monkmedia-config
+              key: MAX_FILE_SIZE
+        - name: UPLOAD_PATH
+          valueFrom:
+            configMapKeyRef:
+              name: monkmedia-config
+              key: UPLOAD_PATH
+        - name: BCRYPT_ROUNDS
+          valueFrom:
+            configMapKeyRef:
+              name: monkmedia-config
+              key: BCRYPT_ROUNDS
+        - name: RATE_LIMIT_WINDOW
+          valueFrom:
+            configMapKeyRef:
+              name: monkmedia-config
+              key: RATE_LIMIT_WINDOW
+        - name: RATE_LIMIT_MAX
+          valueFrom:
+            configMapKeyRef:
+              name: monkmedia-config
+              key: RATE_LIMIT_MAX
+        - name: LOG_LEVEL
+          valueFrom:
+            configMapKeyRef:
+              name: monkmedia-config
+              key: LOG_LEVEL
+        - name: CORS_ORIGIN
+          valueFrom:
+            configMapKeyRef:
+              name: monkmedia-config
+              key: CORS_ORIGIN
+        - name: SESSION_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: monkmedia-secrets
+              key: SESSION_SECRET
+        - name: SESSION_MAX_AGE
+          valueFrom:
+            configMapKeyRef:
+              name: monkmedia-config
+              key: SESSION_MAX_AGE
+        - name: RATE_LIMIT_WINDOW_MS
+          valueFrom:
+            configMapKeyRef:
+              name: monkmedia-config
+              key: RATE_LIMIT_WINDOW_MS
+        - name: RATE_LIMIT_MAX_REQUESTS
+          valueFrom:
+            configMapKeyRef:
+              name: monkmedia-config
+              key: RATE_LIMIT_MAX_REQUESTS
+        - name: HEALTH_CHECK_INTERVAL
+          valueFrom:
+            configMapKeyRef:
+              name: monkmedia-config
+              key: HEALTH_CHECK_INTERVAL
+        volumeMounts:
+        - name: app-uploads
+          mountPath: /app/uploads
+        - name: app-logs
+          mountPath: /app/logs
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+      volumes:
+      - name: app-uploads
+        persistentVolumeClaim:
+          claimName: app-uploads-pvc
+      - name: app-logs
+        persistentVolumeClaim:
+          claimName: app-logs-pvc
+      initContainers:
+      - name: wait-for-mongodb
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z monkmedia-mongodb 27017; do echo waiting for mongodb; sleep 2; done;']
+      - name: wait-for-redis
+        image: busybox:1.35
+        command: ['sh', '-c', 'until nc -z monkmedia-redis 6379; do echo waiting for redis; sleep 2; done;']
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: monkmedia-app
+  namespace: monkmedia-nrcs
+  labels:
+    app: monkmedia-app
+spec:
+  selector:
+    app: monkmedia-app
+  ports:
+  - port: 5000
+    targetPort: 5000
+  type: ClusterIP
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: app-uploads-pvc
+  namespace: monkmedia-nrcs
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 20Gi
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: app-logs-pvc
+  namespace: monkmedia-nrcs
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 5Gi

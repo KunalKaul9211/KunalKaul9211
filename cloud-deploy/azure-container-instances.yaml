@@ -1,0 +1,60 @@
+# Azure Container Instances deployment for MonkMedia NRCS
+apiVersion: 2021-07-01
+type: Microsoft.ContainerInstance/containerGroups
+name: monkmedia-nrcs
+location: eastus
+properties:
+  osType: Linux
+  restartPolicy: Always
+  containers:
+    - name: monkmedia-app
+      properties:
+        image: monkmedia-nrcs:latest
+        ports:
+          - port: 5000
+            protocol: TCP
+        environmentVariables:
+          - name: NODE_ENV
+            value: production
+          - name: PORT
+            value: '5000'
+          - name: MONGODB_URI
+            value: mongodb://monkmedia-mongodb:27017/monkmedia_nrcs
+          - name: REDIS_URL
+            value: redis://monkmedia-redis:6379
+          - name: JWT_SECRET
+            secureValue: your-super-secret-jwt-key-change-this-in-production
+          - name: CLIENT_URL
+            value: https://monkmedia-nrcs.azurecontainer.io
+          - name: SOCKET_URL
+            value: https://monkmedia-nrcs.azurecontainer.io
+        resources:
+          requests:
+            cpu: 1.0
+            memoryInGb: 2.0
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 5000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 5000
+          initialDelaySeconds: 5
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3
+  ipAddress:
+    type: Public
+    ports:
+      - port: 5000
+        protocol: TCP
+    dnsNameLabel: monkmedia-nrcs
+  imageRegistryCredentials:
+    - server: your-registry.azurecr.io
+      username: your-username
+      password: your-password
